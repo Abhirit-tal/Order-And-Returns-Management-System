@@ -1,0 +1,356 @@
+openapi: 3.0.3
+info:
+  title: Order & Returns Management API
+  version: 1.0.0
+  description: |
+    API specification for ArtiCurated order and return management. Covers order lifecycle,
+    returns workflow, and endpoints to inspect state history. Background jobs (invoice/refund)
+    are queued by server-side events and are not directly invoked via these endpoints.
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /orders:
+    post:
+      summary: Create a new order
+      operationId: createOrder
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderCreateRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+  /orders/{orderId}:
+    get:
+      summary: Get an order by id
+      operationId: getOrder
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+    post:
+      summary: Update order lifecycle actions (pay/process/ship/deliver/cancel)
+      operationId: orderAction
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrderActionRequest'
+      responses:
+        '200':
+          description: Action accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+  /orders/{orderId}/history:
+    get:
+      summary: Get order state history
+      operationId: getOrderHistory
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of state changes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StateHistoryRecord'
+
+  /orders/{orderId}/returns:
+    post:
+      summary: Create a return request for a delivered order
+      operationId: createReturn
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnCreateRequest'
+      responses:
+        '201':
+          description: Return created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnResponse'
+
+  /returns/{returnId}:
+    get:
+      summary: Get return request details
+      operationId: getReturn
+      parameters:
+        - name: returnId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnResponse'
+    post:
+      summary: Update return lifecycle actions (approve/reject/ship/receive/complete)
+      operationId: returnAction
+      parameters:
+        - name: returnId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnActionRequest'
+      responses:
+        '200':
+          description: Action accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReturnResponse'
+
+  /returns/{returnId}/history:
+    get:
+      summary: Get return state history
+      operationId: getReturnHistory
+      parameters:
+        - name: returnId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: List of state changes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StateHistoryRecord'
+
+components:
+  schemas:
+    OrderCreateRequest:
+      type: object
+      required: [customerId, items, totalAmount]
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        totalAmount:
+          type: number
+          format: double
+        externalId:
+          type: string
+    OrderItem:
+      type: object
+      required: [sku, name, qty, price]
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        qty:
+          type: integer
+        price:
+          type: number
+          format: double
+    OrderResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        externalId:
+          type: string
+        customerId:
+          type: string
+          format: uuid
+        totalAmount:
+          type: number
+          format: double
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    OrderActionRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [pay, process, ship, deliver, cancel]
+        actor:
+          type: string
+        paymentReference:
+          type: string
+    StateHistoryRecord:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        referenceId:
+          type: string
+          format: uuid
+        previousStatus:
+          type: string
+        newStatus:
+          type: string
+        actor:
+          type: string
+        reason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    ReturnCreateRequest:
+      type: object
+      required: [requestedBy, refundAmount, reason]
+      properties:
+        requestedBy:
+          type: string
+        refundAmount:
+          type: number
+          format: double
+        reason:
+          type: string
+    ReturnResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        refundAmount:
+          type: number
+          format: double
+        requestedAt:
+          type: string
+          format: date-time
+        processedAt:
+          type: string
+          format: date-time
+    ReturnActionRequest:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [approve, reject, ship, receive, complete]
+        actor:
+          type: string
+        note:
+          type: string
+
+    InvoiceRequestDto:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        customerEmail:
+          type: string
+          format: email
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        shippedAt:
+          type: string
+          format: date-time
+
+    RefundRequestDto:
+      type: object
+      properties:
+        jobId:
+          type: string
+          format: uuid
+        returnId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: double
+        paymentReference:
+          type: string
+        requestedBy:
+          type: string
+
+  securitySchemes: {}
+
+tags:
+  - name: orders
+    description: Manage orders and order lifecycle
+  - name: returns
+    description: Manage return requests and their lifecycle
+
+
